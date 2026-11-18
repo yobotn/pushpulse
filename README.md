@@ -16,7 +16,7 @@ The push heartbeat of your GitHub repos. Paste a repo (private ones work too) an
 
 ## Private repos
 
-Create a [fine-grained token](https://github.com/settings/personal-access-tokens/new) scoped to the repos you want, with **Repository permissions → Metadata: Read-only**. Paste it next to the repo. The token is saved in your browser's localStorage and is only ever sent to `api.github.com`.
+Click **🔑 Create a read-only token** in the app ([or use this link](https://github.com/settings/personal-access-tokens/new?name=PushPulse&description=Read-only+token+for+PushPulse+push+tracking&expires_in=90&metadata=read)). GitHub opens with everything pre-filled (read-only Metadata, 90 days). Choose the repos and click Generate. Paste it next to the repo. The token is saved in your browser's localStorage and is only ever sent to `api.github.com`.
 
 ## Background alerts (optional)
 
