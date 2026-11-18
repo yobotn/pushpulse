@@ -16,8 +16,10 @@ header{display:flex;align-items:center;gap:10px;margin-bottom:4px}
 header h1{font-size:22px;margin:0;letter-spacing:-.02em}
 .sub{color:var(--mute);margin:0 0 24px}
 .panel{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px}
-form{display:grid;grid-template-columns:1fr 1fr auto;gap:8px}
-@media (max-width:640px){form{grid-template-columns:1fr}}
+form{display:grid;grid-template-columns:1fr auto;gap:8px}
+.tokform{margin-top:10px;padding:12px;border:1px dashed var(--line);border-radius:10px}
+.tokform .err{margin:0 0 10px}
+.tokform .hint{margin:10px 0 0}
 input,select,button{font:inherit;color:inherit}
 input,select{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:9px 11px;min-width:0}
 input:focus,select:focus,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
@@ -77,10 +79,9 @@ footer a{color:inherit}
   <section class="panel">
     <form id="add">
       <input id="repo" placeholder="owner/repo or GitHub URL" required autocomplete="off" aria-label="Repository">
-      <input id="token" type="password" placeholder="Token (optional, needed for private repos)" autocomplete="off" aria-label="GitHub token">
       <button type="submit">Watch</button>
     </form>
-    <p class="hint"><a class="tokbtn" id="toklink" href="#" target="_blank" rel="noopener">🔑 Create a read-only token</a> Private repo? This opens GitHub with everything pre-filled (read-only <b>Metadata</b>, 90 days). Pick the repos, click Generate, then paste the token above. It's stored only in this browser and sent only to api.github.com.</p>
+    <p class="hint">Public repos work right away. If a repo is private, PushPulse asks you for a token.</p>
     <div class="settings">
       <label>Check every
         <select id="poll"><option value="60">1 min</option><option value="120" selected>2 min</option><option value="300">5 min</option><option value="900">15 min</option></select>
@@ -120,15 +121,11 @@ function parseRepo(v) {
 }
 // GitHub template URL: pre-fills a fine-grained token (read-only metadata is all the activity API needs)
 function tokenUrl(owner) {
-  const p = new URLSearchParams({ name: 'PushPulse', description: 'Read-only token for PushPulse push tracking', expires_in: '90', metadata: 'read' });
+  const p = new URLSearchParams({ name: 'PushPulse', description: 'Read-only token for PushPulse push tracking', expires_in: '90', metadata: 'read', contents: 'read' });
   if (owner) p.set('target_name', owner);
   return 'https://github.com/settings/personal-access-tokens/new?' + p;
 }
-function updateTokenLink() {
-  const owner = parseRepo($('#repo').value)?.split('/')[0];
-  $('#toklink').href = tokenUrl(owner);
-  $('#toklink').textContent = owner ? `🔑 Create a read-only token for ${owner}` : '🔑 Create a read-only token';
-}
+const fail = (msg, needsToken) => Object.assign(new Error(msg), { needsToken });
 const plural = n => `${n} push${n === 1 ? '' : 'es'}`;
 function ago(ts) {
   const s = Math.round((Date.now() - ts) / 1000);
@@ -146,10 +143,19 @@ async function fetchPushes({ name, token }) {
   for (let page = 1; page <= 5; page++) {
     const r = await fetch(`${API}/repos/${name}/activity?time_period=week&per_page=100&page=${page}`, { headers });
     if (!r.ok) {
-      if (r.status === 404) throw new Error(token ? 'Repo not found, or the token has no access to it.' : 'Repo not found. If it is private, add a token.');
-      if (r.status === 401) throw new Error('Token was rejected. Check it or create a new one.');
-      if (r.status === 403 || r.status === 429) throw new Error('GitHub rate limit hit. Add a token or check less often.');
-      throw new Error(`GitHub returned ${r.status}.`);
+      let msg = '';
+      try { msg = (await r.json()).message || '' } catch {}
+      const reset = +r.headers.get('x-ratelimit-reset');
+      if (r.status === 404) throw token
+        ? fail("This token can't see the repo. When you create the token, make sure this repo is selected.", true)
+        : fail('This repo is private (or the name is wrong). Add a token to watch it.', true);
+      if (r.status === 401) throw fail('GitHub rejected this token. It may be expired or pasted incorrectly.', true);
+      if (r.status === 429 || r.headers.get('x-ratelimit-remaining') === '0' || /rate limit/i.test(msg)) {
+        const when = reset ? ` It resets at ${new Date(reset * 1000).toLocaleTimeString()}.` : '';
+        throw fail(`GitHub rate limit reached.${when}${token ? ' Try checking less often.' : ' A token raises the limit.'}`, !token);
+      }
+      if (r.status === 403) throw fail(`GitHub refused access: "${msg || 'forbidden'}". Check that the token includes this repo. For a repo owned by an organization, an admin may need to approve the token first.`, true);
+      throw fail(`GitHub returned ${r.status}${msg ? `: ${msg}` : ''}.`);
     }
     const batch = await r.json();
     for (const a of batch) {
@@ -181,14 +187,37 @@ function sparkline(events) {
 const label = { push: 'pushed to', force_push: 'force-pushed', pr_merge: 'merged PR into', merge_queue_merge: 'merge queue into', branch_creation: 'created branch' };
 
 function render() {
+  // Periodic re-renders must not wipe a token someone is typing
+  const typed = {};
+  let focused = document.activeElement?.closest?.('.tokform')?.dataset.tokenFor;
+  document.querySelectorAll('.tokform').forEach(f => { typed[f.dataset.tokenFor] = f.querySelector('input').value });
+  renderCards();
+  document.querySelectorAll('.tokform').forEach(f => {
+    const input = f.querySelector('input');
+    input.value = typed[f.dataset.tokenFor] || '';
+    if (f.dataset.tokenFor === focused) input.focus();
+  });
+}
+
+function renderCards() {
   const root = $('#repos');
   if (!repos.length) { root.innerHTML = `<div class="panel empty">No repos yet. Add one above and its pulse shows up here.</div>`; return; }
   root.innerHTML = repos.map(({ name, token }) => {
     const s = state[name] || {};
     const head = `<div class="repo-head"><h2><a href="https://github.com/${esc(name)}" target="_blank" rel="noopener">${esc(name)}</a>${token ? '<span class="lock">token</span>' : ''}</h2>
       <span><button class="ghost" data-refresh="${esc(name)}">Refresh</button> <button class="ghost" data-remove="${esc(name)}" aria-label="Stop watching ${esc(name)}">Remove</button></span></div>`;
-    const fix = s.needsToken ? ` <a class="tokbtn" href="${esc(tokenUrl(name.split('/')[0]))}" target="_blank" rel="noopener">🔑 Create token</a>` : '';
-    if (s.error && !s.events) return `<article class="panel">${head}<p class="err">${esc(s.error)}${fix}</p></article>`;
+    const owner = name.split('/')[0];
+    const errBox = !s.error ? '' : !s.needsToken ? `<p class="err">${esc(s.error)}</p>` :
+      `<form class="tokform" data-token-for="${esc(name)}">
+        <p class="err">${esc(s.error)}</p>
+        <div style="display:grid;grid-template-columns:1fr auto;gap:8px">
+          <input type="password" placeholder="Paste token (github_pat_…)" required autocomplete="off" aria-label="GitHub token for ${esc(name)}">
+          <button type="submit">Save token</button>
+        </div>
+        <p class="hint"><a class="tokbtn" href="${esc(tokenUrl(owner))}" target="_blank" rel="noopener">🔑 Create a read-only token for ${esc(owner)}</a>
+        This opens GitHub with the details filled in (read-only access, 90 days). Under <b>Repository access</b>, choose <b>${esc(name.split('/')[1])}</b>, click Generate, and paste the token here. It stays in this browser and is only sent to api.github.com.</p>
+      </form>`;
+    if (s.error && !s.events) return `<article class="panel">${head}${errBox}</article>`;
     if (!s.events) return `<article class="panel">${head}<p class="sentence">Checking…</p></article>`;
     const c = counts(s.events);
     const stats = WINDOWS.map(([k, , l]) => `<div class="stat ${c[k] ? 'hot' : ''}"><div class="n">${c[k]}</div><div class="l">${l}</div></div>`).join('');
@@ -198,7 +227,7 @@ function render() {
       <div class="stats">${stats}</div>
       ${sparkline(s.events)}
       ${s.events.length ? `<details><summary>Recent pushes (${Math.min(15, s.events.length)} of ${s.events.length} this week)</summary><ul class="feed">${feed}</ul></details>` : ''}
-      ${s.error ? `<p class="err">${esc(s.error)}</p>` : ''}
+      ${errBox}
       <p class="meta"><span class="dot"></span> Last checked ${new Date(s.checked).toLocaleTimeString()}</p>
     </article>`;
   }).join('');
@@ -221,7 +250,7 @@ async function check(repo) {
       document.title = `(${fresh.length}) PushPulse`;
     }
     s.primed = true; s.events = events; s.error = null;
-  } catch (err) { s.error = err.message; s.needsToken = /token/i.test(err.message) }
+  } catch (err) { s.error = err.message; s.needsToken = !!err.needsToken }
   s.checked = Date.now();
 }
 
@@ -255,11 +284,13 @@ $('#add').addEventListener('submit', async e => {
   e.preventDefault();
   const name = parseRepo($('#repo').value);
   if (!name) { $('#status').textContent = 'Use owner/repo or a GitHub URL.'; return; }
-  const token = $('#token').value.trim();
+  // Reuse a token already saved for the same owner, so one token covers all of that owner's repos
+  const owner = name.split('/')[0].toLowerCase();
+  const token = repos.find(r => r.token && r.name.split('/')[0].toLowerCase() === owner)?.token || '';
   repos = repos.filter(r => r.name.toLowerCase() !== name.toLowerCase()).concat({ name, token });
   delete state[name];
   store.set('repos', repos);
-  $('#repo').value = ''; $('#token').value = ''; updateTokenLink();
+  $('#repo').value = '';
   render();
   await check(repos.at(-1)); render();
 });
@@ -267,6 +298,17 @@ $('#repos').addEventListener('click', async e => {
   const rm = e.target.dataset.remove, rf = e.target.dataset.refresh;
   if (rm) { repos = repos.filter(r => r.name !== rm); delete state[rm]; store.set('repos', repos); render(); }
   if (rf) { e.target.textContent = '…'; await check(repos.find(r => r.name === rf)); render(); }
+});
+$('#repos').addEventListener('submit', async e => {
+  e.preventDefault();
+  const name = e.target.dataset.tokenFor, token = e.target.querySelector('input').value.trim();
+  const repo = repos.find(r => r.name === name);
+  if (!repo || !token) return;
+  repo.token = token;
+  store.set('repos', repos);
+  e.target.querySelector('button').textContent = 'Checking…';
+  e.target.querySelector('input').value = '';
+  await check(repo); render();
 });
 $('#notify').addEventListener('click', async () => {
   if (!('Notification' in window)) { $('#status').textContent = 'This browser does not support notifications.'; return; }
@@ -286,8 +328,7 @@ const saved = store.get('settings', {});
 if (saved.poll) $('#poll').value = saved.poll;
 if (saved.summary) $('#summary').value = saved.summary;
 setInterval(render, 30e3); // keep "ago" labels and windows fresh between checks
-$('#repo').addEventListener('input', updateTokenLink);
-updateTokenLink(); updateNotifyBtn(); render(); schedule(); checkAll();
+updateNotifyBtn(); render(); schedule(); checkAll();
 </script>
 </body>
 </html>
