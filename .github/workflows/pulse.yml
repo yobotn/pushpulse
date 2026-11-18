@@ -1,0 +1,21 @@
+name: Hourly pulse
+on:
+  schedule:
+    - cron: '0 * * * *'
+  workflow_dispatch:
+
+jobs:
+  pulse:
+    # Opt-in: set the repository variable PULSE_ENABLED=true in your fork
+    if: ${{ vars.PULSE_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: node scripts/pulse.mjs
+        env:
+          WATCH_REPOS: ${{ vars.WATCH_REPOS }}
+          GH_TOKEN: ${{ secrets.WATCH_TOKEN }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}

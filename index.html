@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PushPulse</title>
+<meta name="description" content="Track pushes on any GitHub repo, private ones included. Live alerts and periodic summaries.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><path d='M2 17h7l3-9 5 16 4-11 2 4h7' fill='none' stroke='%2322c55e' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/></svg>">
+<style>
+:root{--bg:#f7f7f5;--card:#fff;--ink:#16181d;--mute:#6b7080;--line:#e4e4e0;--accent:#16a34a;--accent-soft:#dcfce7;--warn:#b45309;--err:#b91c1c}
+@media (prefers-color-scheme:dark){:root{--bg:#0e1013;--card:#16191e;--ink:#e8eaee;--mute:#8b91a0;--line:#262a31;--accent:#22c55e;--accent-soft:#12301d;--warn:#f59e0b;--err:#f87171}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:860px;margin:0 auto;padding:32px 16px 64px}
+header{display:flex;align-items:center;gap:10px;margin-bottom:4px}
+header h1{font-size:22px;margin:0;letter-spacing:-.02em}
+.sub{color:var(--mute);margin:0 0 24px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px}
+form{display:grid;grid-template-columns:1fr 1fr auto;gap:8px}
+@media (max-width:640px){form{grid-template-columns:1fr}}
+input,select,button{font:inherit;color:inherit}
+input,select{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:9px 11px;min-width:0}
+input:focus,select:focus,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+button{border:0;border-radius:8px;padding:9px 14px;background:var(--accent);color:#fff;font-weight:600;cursor:pointer}
+button.ghost{background:transparent;color:var(--mute);border:1px solid var(--line);font-weight:500;padding:6px 10px}
+.hint{font-size:13px;color:var(--mute);margin:10px 0 0}
+.hint a{color:inherit}
+.settings{display:flex;flex-wrap:wrap;gap:16px;align-items:center;margin-top:14px;padding-top:14px;border-top:1px solid var(--line);font-size:14px}
+.settings label{display:flex;gap:8px;align-items:center;color:var(--mute)}
+.settings select{padding:5px 8px}
+#repos{display:grid;gap:16px;margin-top:20px}
+.repo-head{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.repo-head h2{font-size:17px;margin:0;word-break:break-all}
+.repo-head h2 a{color:inherit;text-decoration:none}
+.repo-head h2 a:hover{text-decoration:underline}
+.lock{font-size:12px;color:var(--mute);border:1px solid var(--line);border-radius:99px;padding:1px 8px;margin-left:6px;vertical-align:2px}
+.sentence{margin:8px 0 14px;color:var(--mute)}
+.sentence b{color:var(--ink)}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+@media (max-width:520px){.stats{grid-template-columns:repeat(2,1fr)}}
+.stat{border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.stat .n{font-size:28px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.1}
+.stat .l{font-size:12px;color:var(--mute);text-transform:uppercase;letter-spacing:.04em}
+.stat.hot{background:var(--accent-soft);border-color:transparent}
+.stat.hot .n{color:var(--accent)}
+.spark{display:flex;align-items:flex-end;gap:2px;height:44px;margin:14px 0 4px}
+.spark i{flex:1;background:var(--accent);border-radius:2px 2px 0 0;min-height:2px;opacity:.85}
+.spark i.z{background:var(--line);opacity:1}
+.spark-l{display:flex;justify-content:space-between;font-size:11px;color:var(--mute)}
+details{margin-top:12px}
+summary{cursor:pointer;color:var(--mute);font-size:14px}
+ul.feed{list-style:none;margin:8px 0 0;padding:0;font-size:14px}
+ul.feed li{display:flex;gap:8px;align-items:center;padding:6px 0;border-top:1px solid var(--line)}
+ul.feed img{width:20px;height:20px;border-radius:50%}
+ul.feed code{background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:0 5px;font-size:12px}
+ul.feed .t{margin-left:auto;color:var(--mute);white-space:nowrap}
+.err{color:var(--err);font-size:14px;margin-top:8px}
+.meta{font-size:12px;color:var(--mute);margin-top:10px}
+.empty{text-align:center;color:var(--mute);padding:36px 16px}
+footer{margin-top:32px;font-size:13px;color:var(--mute)}
+footer a{color:inherit}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block;animation:p 2s infinite}
+@keyframes p{50%{opacity:.3}}
+@media (prefers-reduced-motion:reduce){.dot{animation:none}}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <svg width="28" height="28" viewBox="0 0 32 32" aria-hidden="true"><path d="M2 17h7l3-9 5 16 4-11 2 4h7" fill="none" stroke="var(--accent)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <h1>PushPulse</h1>
+  </header>
+  <p class="sub">The push heartbeat of your GitHub repos. Every count is shown, zeros included.</p>
+
+  <section class="panel">
+    <form id="add">
+      <input id="repo" placeholder="owner/repo or GitHub URL" required autocomplete="off" aria-label="Repository">
+      <input id="token" type="password" placeholder="Token (optional, needed for private repos)" autocomplete="off" aria-label="GitHub token">
+      <button type="submit">Watch</button>
+    </form>
+    <p class="hint">For private repos, create a <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">fine-grained token</a> with read-only <b>Metadata</b> access. It's stored only in this browser and sent only to api.github.com.</p>
+    <div class="settings">
+      <label>Check every
+        <select id="poll"><option value="60">1 min</option><option value="120" selected>2 min</option><option value="300">5 min</option><option value="900">15 min</option></select>
+      </label>
+      <label>Summary
+        <select id="summary"><option value="0">off</option><option value="3600" selected>every hour</option><option value="21600">every 6 h</option><option value="86400">daily</option></select>
+      </label>
+      <button class="ghost" id="notify" type="button">Enable notifications</button>
+      <span id="status" class="hint" style="margin:0"></span>
+    </div>
+  </section>
+
+  <section id="repos" aria-live="polite"></section>
+
+  <footer>
+    Want alerts with the tab closed? Fork this repo and turn on the hourly <a href="https://github.com/yobotn/pushpulse#background-alerts-optional">GitHub Action → ntfy</a>.
+    · <a href="https://github.com/yobotn/pushpulse">Source</a>
+  </footer>
+</main>
+
+<script>
+const API = 'https://api.github.com';
+const WINDOWS = [['1h', 3600e3, 'last hour'], ['6h', 6 * 3600e3, 'last 6 hours'], ['24h', 86400e3, 'last 24 hours'], ['7d', 7 * 86400e3, 'last 7 days']];
+const store = {
+  get(k, d) { try { return JSON.parse(localStorage.getItem('pp:' + k)) ?? d } catch { return d } },
+  set(k, v) { try { localStorage.setItem('pp:' + k, JSON.stringify(v)) } catch {} }
+};
+let repos = store.get('repos', []);           // [{name, token}]
+const state = {};                              // name -> {events, error, checked, seen:Set, primed}
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+function parseRepo(v) {
+  v = v.trim().replace(/\.git$/, '').replace(/\/+$/, '');
+  const m = v.match(/(?:github\.com[/:])?([\w.-]+)\/([\w.-]+)$/);
+  return m ? `${m[1]}/${m[2]}` : null;
+}
+const plural = n => `${n} push${n === 1 ? '' : 'es'}`;
+function ago(ts) {
+  const s = Math.round((Date.now() - ts) / 1000);
+  if (s < 60) return 'just now';
+  if (s < 3600) return Math.floor(s / 60) + 'm ago';
+  if (s < 86400) return Math.floor(s / 3600) + 'h ago';
+  return Math.floor(s / 86400) + 'd ago';
+}
+
+// Real push activity (all branches), not commits. Branch deletions aren't pushes.
+async function fetchPushes({ name, token }) {
+  const headers = { Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' };
+  if (token) headers.Authorization = 'Bearer ' + token;
+  const cutoff = Date.now() - 7 * 86400e3, out = [];
+  for (let page = 1; page <= 5; page++) {
+    const r = await fetch(`${API}/repos/${name}/activity?time_period=week&per_page=100&page=${page}`, { headers });
+    if (!r.ok) {
+      if (r.status === 404) throw new Error(token ? 'Repo not found, or the token has no access to it.' : 'Repo not found. If it is private, add a token.');
+      if (r.status === 401) throw new Error('Token was rejected. Check it or create a new one.');
+      if (r.status === 403 || r.status === 429) throw new Error('GitHub rate limit hit. Add a token or check less often.');
+      throw new Error(`GitHub returned ${r.status}.`);
+    }
+    const batch = await r.json();
+    for (const a of batch) {
+      const ts = Date.parse(a.timestamp);
+      if (ts < cutoff) return out;
+      if (a.activity_type === 'branch_deletion') continue;
+      out.push({ id: a.id, ts, type: a.activity_type, ref: (a.ref || '').replace('refs/heads/', ''), actor: a.actor?.login || 'someone', avatar: a.actor?.avatar_url, after: a.after });
+    }
+    if (batch.length < 100) break;
+  }
+  return out;
+}
+
+function counts(events) {
+  const now = Date.now();
+  return Object.fromEntries(WINDOWS.map(([k, ms]) => [k, events.filter(e => now - e.ts <= ms).length]));
+}
+const sentence = c => `In the <b>last hour</b> ${plural(c['1h'])}, <b>last 6 hours</b> ${plural(c['6h'])}, <b>24 hours</b> ${plural(c['24h'])}, <b>7 days</b> ${plural(c['7d'])}.`;
+
+function sparkline(events) {
+  const now = Date.now(), bins = Array(24).fill(0);
+  for (const e of events) { const h = Math.floor((now - e.ts) / 3600e3); if (h < 24) bins[23 - h]++; }
+  const max = Math.max(1, ...bins);
+  return `<div class="spark" role="img" aria-label="Pushes per hour, last 24 hours">${bins.map((b, i) =>
+    `<i class="${b ? '' : 'z'}" style="height:${b ? Math.max(8, b / max * 100) : 4}%" title="${b} push${b === 1 ? '' : 'es'}, ${23 - i}h ago"></i>`).join('')}</div>
+    <div class="spark-l"><span>24h ago</span><span>now</span></div>`;
+}
+
+const label = { push: 'pushed to', force_push: 'force-pushed', pr_merge: 'merged PR into', merge_queue_merge: 'merge queue into', branch_creation: 'created branch' };
+
+function render() {
+  const root = $('#repos');
+  if (!repos.length) { root.innerHTML = `<div class="panel empty">No repos yet. Add one above and its pulse shows up here.</div>`; return; }
+  root.innerHTML = repos.map(({ name, token }) => {
+    const s = state[name] || {};
+    const head = `<div class="repo-head"><h2><a href="https://github.com/${esc(name)}" target="_blank" rel="noopener">${esc(name)}</a>${token ? '<span class="lock">token</span>' : ''}</h2>
+      <span><button class="ghost" data-refresh="${esc(name)}">Refresh</button> <button class="ghost" data-remove="${esc(name)}" aria-label="Stop watching ${esc(name)}">Remove</button></span></div>`;
+    if (s.error && !s.events) return `<article class="panel">${head}<p class="err">${esc(s.error)}</p></article>`;
+    if (!s.events) return `<article class="panel">${head}<p class="sentence">Checking…</p></article>`;
+    const c = counts(s.events);
+    const stats = WINDOWS.map(([k, , l]) => `<div class="stat ${c[k] ? 'hot' : ''}"><div class="n">${c[k]}</div><div class="l">${l}</div></div>`).join('');
+    const feed = s.events.slice(0, 15).map(e => `<li>${e.avatar ? `<img src="${esc(e.avatar)}&s=40" alt="">` : ''}<span><b>${esc(e.actor)}</b> ${label[e.type] || 'pushed to'} <code>${esc(e.ref)}</code></span><span class="t">${ago(e.ts)}</span></li>`).join('');
+    return `<article class="panel">${head}
+      <p class="sentence">${sentence(c)}</p>
+      <div class="stats">${stats}</div>
+      ${sparkline(s.events)}
+      ${s.events.length ? `<details><summary>Recent pushes (${Math.min(15, s.events.length)} of ${s.events.length} this week)</summary><ul class="feed">${feed}</ul></details>` : ''}
+      ${s.error ? `<p class="err">${esc(s.error)}</p>` : ''}
+      <p class="meta"><span class="dot"></span> Last checked ${new Date(s.checked).toLocaleTimeString()}</p>
+    </article>`;
+  }).join('');
+}
+
+function notify(title, body) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  try { new Notification(title, { body, icon: $('link[rel=icon]').href, tag: title }) } catch {}
+}
+
+async function check(repo) {
+  const s = state[repo.name] ||= { seen: new Set(), primed: false };
+  try {
+    const events = await fetchPushes(repo);
+    const fresh = events.filter(e => !s.seen.has(e.id));
+    events.forEach(e => s.seen.add(e.id));
+    if (s.primed && fresh.length) {
+      const e = fresh[0];
+      notify(`${repo.name}: ${plural(fresh.length)}`, fresh.length === 1 ? `${e.actor} ${label[e.type] || 'pushed to'} ${e.ref}` : `Latest: ${e.actor} → ${e.ref}`);
+      document.title = `(${fresh.length}) PushPulse`;
+    }
+    s.primed = true; s.events = events; s.error = null;
+  } catch (err) { s.error = err.message }
+  s.checked = Date.now();
+}
+
+async function checkAll() {
+  $('#status').textContent = 'Checking…';
+  await Promise.all(repos.map(check));
+  $('#status').textContent = '';
+  render();
+}
+
+function summary() {
+  const lines = repos.filter(r => state[r.name]?.events).map(r => {
+    const c = counts(state[r.name].events);
+    return `${r.name}: 1h ${c['1h']} · 6h ${c['6h']} · 24h ${c['24h']}`;
+  });
+  if (lines.length) notify('PushPulse summary', lines.join('\n'));
+}
+
+// Timers
+let pollTimer, summaryTimer;
+function schedule() {
+  clearInterval(pollTimer); clearInterval(summaryTimer);
+  pollTimer = setInterval(checkAll, +$('#poll').value * 1000);
+  const sum = +$('#summary').value;
+  if (sum) summaryTimer = setInterval(summary, sum * 1000);
+  store.set('settings', { poll: $('#poll').value, summary: $('#summary').value });
+}
+
+// UI wiring
+$('#add').addEventListener('submit', async e => {
+  e.preventDefault();
+  const name = parseRepo($('#repo').value);
+  if (!name) { $('#status').textContent = 'Use owner/repo or a GitHub URL.'; return; }
+  const token = $('#token').value.trim();
+  repos = repos.filter(r => r.name.toLowerCase() !== name.toLowerCase()).concat({ name, token });
+  delete state[name];
+  store.set('repos', repos);
+  $('#repo').value = ''; $('#token').value = '';
+  render();
+  await check(repos.at(-1)); render();
+});
+$('#repos').addEventListener('click', async e => {
+  const rm = e.target.dataset.remove, rf = e.target.dataset.refresh;
+  if (rm) { repos = repos.filter(r => r.name !== rm); delete state[rm]; store.set('repos', repos); render(); }
+  if (rf) { e.target.textContent = '…'; await check(repos.find(r => r.name === rf)); render(); }
+});
+$('#notify').addEventListener('click', async () => {
+  if (!('Notification' in window)) { $('#status').textContent = 'This browser does not support notifications.'; return; }
+  const p = await Notification.requestPermission();
+  updateNotifyBtn();
+  if (p === 'granted') notify('PushPulse is on', 'You will be pinged for new pushes while this tab is open.');
+});
+function updateNotifyBtn() {
+  const p = 'Notification' in window ? Notification.permission : 'unsupported';
+  $('#notify').textContent = p === 'granted' ? 'Notifications on ✓' : p === 'denied' ? 'Notifications blocked' : 'Enable notifications';
+  $('#notify').disabled = p !== 'default';
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) document.title = 'PushPulse' });
+['poll', 'summary'].forEach(id => $('#' + id).addEventListener('change', schedule));
+
+const saved = store.get('settings', {});
+if (saved.poll) $('#poll').value = saved.poll;
+if (saved.summary) $('#summary').value = saved.summary;
+setInterval(render, 30e3); // keep "ago" labels and windows fresh between checks
+updateNotifyBtn(); render(); schedule(); checkAll();
+</script>
+</body>
+</html>
