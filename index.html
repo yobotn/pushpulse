@@ -61,8 +61,13 @@ ul.feed .t{margin-left:auto;color:var(--mute);white-space:nowrap}
 .err{color:var(--err);font-size:14px;margin-top:8px}
 .meta{font-size:12px;color:var(--mute);margin-top:10px}
 .empty{text-align:center;color:var(--mute);padding:36px 16px}
-footer{margin-top:32px;font-size:13px;color:var(--mute)}
+footer{margin-top:40px;padding-top:20px;border-top:1px solid var(--line);font-size:13px;color:var(--mute)}
 footer a{color:inherit}
+footer a:hover{color:var(--ink)}
+footer p{margin:0 0 10px}
+.foot-row{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px 16px}
+.foot-brand{display:flex;align-items:center;gap:6px;color:var(--ink);font-weight:600}
+.foot-links{display:flex;flex-wrap:wrap;gap:6px 16px;list-style:none;margin:0;padding:0}
 .dot{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block;animation:p 2s infinite}
 @keyframes p{50%{opacity:.3}}
 @media (prefers-reduced-motion:reduce){.dot{animation:none}}
@@ -97,8 +102,17 @@ footer a{color:inherit}
   <section id="repos" aria-live="polite"></section>
 
   <footer>
-    Want alerts with the tab closed? Fork this repo and turn on the hourly <a href="https://github.com/yobotn/pushpulse#background-alerts-optional">GitHub Action → ntfy</a>.
-    · <a href="https://github.com/yobotn/pushpulse">Source</a>
+    <p>Want alerts with the tab closed? Fork this repo and turn on the hourly <a href="https://github.com/yobotn/pushpulse#background-alerts-optional">GitHub Action → ntfy</a>.</p>
+    <p>Tokens and watched repos stay in this browser. PushPulse has no server and only talks to api.github.com.</p>
+    <div class="foot-row">
+      <span class="foot-brand"><svg width="16" height="16" viewBox="0 0 32 32" aria-hidden="true"><path d="M2 17h7l3-9 5 16 4-11 2 4h7" fill="none" stroke="var(--accent)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>PushPulse</span>
+      <ul class="foot-links">
+        <li><a href="https://github.com/yobotn/pushpulse">Source</a></li>
+        <li><a href="https://github.com/yobotn/pushpulse#how-it-works">How it works</a></li>
+        <li><a href="https://github.com/yobotn/pushpulse/issues">Report an issue</a></li>
+        <li><a href="https://github.com/yobotn/pushpulse#license">License</a></li>
+      </ul>
+    </div>
   </footer>
 </main>
 
