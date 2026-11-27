@@ -10,6 +10,7 @@ The push heartbeat of your GitHub repos. Paste a repo (private ones work too) an
 
 - Counts real **pushes** on all branches (including force pushes and PR merges), not commits. One push with 30 commits counts once.
 - Windows: last hour, 6 hours, 24 hours, 7 days. There's also a 24-hour sparkline and a feed of recent pushes.
+- **Project history heat map**: a daily, GitHub-style heat map of pushes or commits across the whole life of the repo. Drag the two handles of the range slider (over a weekly overview of the full history) to pick any period, or use the 3 months / 1 year / All presets. It shows the total, active days, busiest day and longest streak for the selected range.
 - Sends a browser notification for every new push while the tab is open.
 - Sends a periodic summary notification (hourly, every 6 h or daily).
 - Watches several repos at once. It's one static HTML file with no backend and no build step.
@@ -30,6 +31,8 @@ A web page can't notify you after it's closed. For alerts that keep coming, fork
 ## How it works
 
 It uses GitHub's [repository activity API](https://docs.github.com/en/rest/repos/repos#list-repository-activities) (`GET /repos/{owner}/{repo}/activity`), which records each push event with timestamp, branch and actor. Branch deletions are excluded.
+
+The history heat map loads on demand when you open it. Pushes come from the same activity log (without a time limit); commits come from `GET /repos/{owner}/{repo}/commits` (default branch, by author date). Up to 3,000 items are loaded per metric, and the result is cached in your browser until you click Reload. Without a token, one full load can use up to 31 of GitHub's 60 requests per hour.
 
 ## Run locally
 
